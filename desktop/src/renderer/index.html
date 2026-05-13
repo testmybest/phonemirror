@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PhoneMirror</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            color: #fff; min-height: 100vh; overflow: hidden;
+        }
+        .container { display: flex; flex-direction: column; height: 100vh; }
+        .titlebar {
+            height: 40px; background: rgba(0,0,0,0.3);
+            display: flex; align-items: center; justify-content: center;
+            -webkit-app-region: drag;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+        .titlebar h1 { font-size: 14px; font-weight: 500; letter-spacing: 1px; }
+        .main-content { flex: 1; display: flex; position: relative; }
+
+        /* Connection Panel */
+        .connection-panel {
+            position: absolute; top: 50%; left: 50%;
+            transform: translate(-50%, -50%); text-align: center;
+            padding: 40px; background: rgba(255,255,255,0.05);
+            border-radius: 20px; backdrop-filter: blur(10px);
+            border: 1px solid rgba(255,255,255,0.1);
+            transition: opacity 0.3s, visibility 0.3s;
+            max-width: 500px; width: 90%;
+        }
+        .connection-panel.hidden { opacity: 0; visibility: hidden; pointer-events: none; }
+        .connection-panel h2 { font-size: 24px; margin-bottom: 20px; font-weight: 300; }
+
+        .qr-container {
+            width: 180px; height: 180px; margin: 0 auto 20px;
+            background: #fff; border-radius: 12px; padding: 10px;
+            display: flex; align-items: center; justify-content: center;
+        }
+        .qr-container canvas { max-width: 100%; max-height: 100%; }
+
+        .room-code {
+            font-size: 32px; font-weight: bold; letter-spacing: 8px;
+            margin: 15px 0; color: #00d4ff;
+            text-shadow: 0 0 20px rgba(0,212,255,0.5);
+        }
+
+        /* IP Selector */
+        .ip-section {
+            margin: 20px 0; text-align: left;
+        }
+        .ip-section label {
+            display: block; font-size: 13px;
+            color: rgba(255,255,255,0.6); margin-bottom: 8px;
+        }
+        .ip-list {
+            display: flex; flex-direction: column; gap: 6px;
+        }
+        .ip-item {
+            display: flex; align-items: center; gap: 10px;
+            padding: 10px 14px; background: rgba(255,255,255,0.05);
+            border: 2px solid transparent; border-radius: 10px;
+            cursor: pointer; transition: all 0.2s;
+        }
+        .ip-item:hover { background: rgba(255,255,255,0.1); }
+        .ip-item.active { border-color: #00d4ff; background: rgba(0,212,255,0.1); }
+        .ip-item .ip-name { font-size: 12px; color: rgba(255,255,255,0.5); }
+        .ip-item .ip-addr { font-size: 16px; font-weight: bold; color: #00d4ff; font-family: monospace; }
+        .ip-item .ip-badge { font-size: 10px; padding: 2px 8px; border-radius: 10px; background: #4ade80; color: #000; font-weight: bold; }
+
+        .connection-info { color: rgba(255,255,255,0.6); font-size: 13px; line-height: 1.8; margin-top: 15px; }
+
+        .troubleshoot {
+            margin-top: 15px; padding: 12px; background: rgba(255,165,0,0.1);
+            border: 1px solid rgba(255,165,0,0.3); border-radius: 10px;
+            text-align: left; font-size: 12px; color: rgba(255,255,255,0.7);
+        }
+        .troubleshoot h4 { color: #ffa500; margin-bottom: 8px; font-size: 13px; }
+        .troubleshoot ul { padding-left: 18px; }
+        .troubleshoot li { margin: 4px 0; }
+
+        /* Video Container - 支持滚动 */
+        .video-container {
+            flex: 1; display: flex; align-items: center; justify-content: center;
+            background: #000; position: relative;
+            overflow: auto;
+            width: 100%; height: 100%;
+        }
+        .video-container.hidden { display: none; }
+        
+        /* 自定义滚动条 */
+        .video-container::-webkit-scrollbar {
+            width: 10px; height: 10px;
+        }
+        .video-container::-webkit-scrollbar-track {
+            background: rgba(255,255,255,0.05);
+        }
+        .video-container::-webkit-scrollbar-thumb {
+            background: rgba(255,255,255,0.3);
+            border-radius: 5px;
+        }
+        .video-container::-webkit-scrollbar-thumb:hover {
+            background: rgba(255,255,255,0.5);
+        }
+        .video-container::-webkit-scrollbar-corner {
+            background: rgba(255,255,255,0.05);
+        }
+        
+        /* 视频显示 */
+        #remoteVideo {
+            transform-origin: center center;
+            transition: transform 0.1s ease-out;
+            display: block;
+            min-width: 100%;
+            min-height: 100%;
+        }
+        #remoteVideo.fit-contain {
+            max-width: 100%; max-height: 100%;
+            object-fit: contain;
+            min-width: auto; min-height: auto;
+        }
+        #remoteVideo.fit-original {
+            max-width: none; max-height: none;
+            object-fit: none;
+        }
+
+        /* Status Bar */
+        .status-bar {
+            position: absolute; top: 20px; right: 20px;
+            display: flex; gap: 20px; background: rgba(0,0,0,0.6);
+            padding: 10px 20px; border-radius: 20px; font-size: 12px;
+            opacity: 0; transition: opacity 0.3s;
+        }
+        .status-bar.visible { opacity: 1; }
+        .status-item { display: flex; align-items: center; gap: 8px; }
+        .status-dot {
+            width: 8px; height: 8px; border-radius: 50%;
+            background: #4ade80; animation: pulse 2s infinite;
+        }
+        @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.5} }
+
+        /* Controls - 底部控制栏 */
+        .controls {
+            position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%);
+            display: flex; gap: 10px; background: rgba(0,0,0,0.8);
+            padding: 12px 20px; border-radius: 30px;
+            opacity: 0; transition: opacity 0.3s;
+        }
+        .controls.visible { opacity: 1; }
+        .ctrl-btn {
+            width: 44px; height: 44px; border: none;
+            background: rgba(255,255,255,0.1); border-radius: 50%;
+            color: #fff; cursor: pointer; display: flex;
+            align-items: center; justify-content: center;
+            transition: all 0.2s; font-size: 18px;
+        }
+        .ctrl-btn:hover { background: rgba(255,255,255,0.2); transform: scale(1.1); }
+        .ctrl-btn:active { transform: scale(0.95); }
+        .ctrl-btn.active { background: #00d4ff; color: #000; }
+        .ctrl-btn.danger { background: #ef4444; }
+        .ctrl-btn.danger:hover { background: #dc2626; }
+
+        /* 缩放信息提示 */
+        .zoom-info {
+            position: absolute; top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0,0,0,0.8);
+            padding: 15px 30px; border-radius: 10px;
+            font-size: 24px; font-weight: bold;
+            opacity: 0; transition: opacity 0.3s;
+            pointer-events: none;
+        }
+        .zoom-info.visible { opacity: 1; }
+
+        /* 快捷键提示 */
+        .shortcuts-hint {
+            position: absolute; bottom: 100px; left: 50%; transform: translateX(-50%);
+            background: rgba(0,0,0,0.7);
+            padding: 10px 20px; border-radius: 10px;
+            font-size: 12px; color: rgba(255,255,255,0.7);
+            opacity: 0; transition: opacity 0.3s;
+        }
+        .shortcuts-hint.visible { opacity: 1; }
+
+        /* Loading */
+        .loading {
+            position: absolute; top: 50%; left: 50%;
+            transform: translate(-50%, -50%); text-align: center; display: none;
+        }
+        .loading.visible { display: block; }
+        .spinner {
+            width: 50px; height: 50px;
+            border: 3px solid rgba(255,255,255,0.1);
+            border-top-color: #00d4ff; border-radius: 50%;
+            animation: spin 1s linear infinite; margin: 0 auto 20px;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="titlebar"><h1>PhoneMirror</h1></div>
+        <div class="main-content">
+            <div class="connection-panel" id="connectionPanel">
+                <h2>📱 手机投屏</h2>
+                <div class="qr-container"><canvas id="qrCanvas"></canvas></div>
+                <div class="room-code" id="roomCode">------</div>
+
+                <div class="ip-section">
+                    <label>选择网络地址（手机需访问此 IP）：</label>
+                    <div class="ip-list" id="ipList">
+                        <div style="color:rgba(255,255,255,0.4);padding:10px;">Loading...</div>
+                    </div>
+                </div>
+
+                <div class="connection-info">
+                    <p>1. 在手机上安装 PhoneMirror App</p>
+                    <p>2. 扫描二维码或输入上方配对码</p>
+                    <p>3. 确保手机和电脑在同一 WiFi 网络</p>
+                </div>
+
+                <div class="troubleshoot">
+                    <h4>⚠️ 如果手机提示 "host unreachable"</h4>
+                    <ul>
+                        <li>确认手机和电脑连接 <b>同一个 WiFi</b></li>
+                        <li>尝试选择不同的 IP 地址</li>
+                        <li>关闭 Windows 防火墙</li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="video-container hidden" id="videoContainer">
+                <video id="remoteVideo" class="fit-contain" autoplay playsinline></video>
+                
+                <div class="status-bar" id="statusBar">
+                    <div class="status-item"><div class="status-dot"></div><span id="statusText">已连接</span></div>
+                    <div class="status-item"><span>🎬</span><span id="fpsText">0 FPS</span></div>
+                    <div class="status-item"><span>📐</span><span id="zoomText">100%</span></div>
+                </div>
+                
+                <div class="controls" id="controls">
+                    <button class="ctrl-btn" id="btnZoomOut" title="缩小 (-)">➖</button>
+                    <button class="ctrl-btn" id="btnZoomReset" title="重置 (0)">🎯</button>
+                    <button class="ctrl-btn" id="btnZoomIn" title="放大 (+)">➕</button>
+                    <button class="ctrl-btn" id="btnFitContain" title="适应窗口 (F)">📐</button>
+                    <button class="ctrl-btn" id="btnFullscreen" title="全屏 (F11)">⛶</button>
+                    <button class="ctrl-btn danger" id="btnDisconnect" title="断开 (Esc)">⏻</button>
+                </div>
+
+                <div class="zoom-info" id="zoomInfo">100%</div>
+                
+                <div class="shortcuts-hint" id="shortcutsHint">
+                    快捷键: +/- 缩放 | 0 重置 | F 适应 | F11 全屏 | Esc 断开
+                </div>
+            </div>
+
+            <div class="loading" id="loading"><div class="spinner"></div><p>Connecting...</p></div>
+        </div>
+    </div>
+    <script src="app.js"></script>
+</body>
+</html>

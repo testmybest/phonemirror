@@ -1,0 +1,76 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'com.phonemirror.app'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId "com.phonemirror.app"
+        minSdk 26
+        targetSdk 34
+        versionCode 1
+        versionName "1.0.0"
+        
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+        debug {
+            debuggable true
+        }
+    }
+    
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+    
+    buildFeatures {
+        viewBinding true
+    }
+    
+    // 解决 native 库冲突
+    packagingOptions {
+        pickFirst 'lib/arm64-v8a/libjingle_peerconnection_so.so'
+        pickFirst 'lib/armeabi-v7a/libjingle_peerconnection_so.so'
+        pickFirst 'lib/x86/libjingle_peerconnection_so.so'
+        pickFirst 'lib/x86_64/libjingle_peerconnection_so.so'
+    }
+}
+
+dependencies {
+    implementation 'androidx.appcompat:appcompat:1.6.1'
+    implementation 'com.google.android.material:material:1.11.0'
+    implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
+    implementation 'androidx.activity:activity:1.8.0'
+    
+    // WebRTC - 使用 webrtc-sdk (提供 org.webrtc.* 包名)
+    implementation 'io.github.webrtc-sdk:android:125.6422.02'
+    
+    // WebSocket
+    implementation 'org.java-websocket:Java-WebSocket:1.5.3'
+    
+    // QR Code - 排除可能冲突的依赖
+    implementation('com.journeyapps:zxing-android-embedded:4.3.0') {
+        exclude group: 'com.android.support'
+    }
+    
+    // ZXing core
+    implementation 'com.google.zxing:core:3.5.2'
+    
+    // JSON
+    implementation 'com.google.code.gson:gson:2.10.1'
+    
+    // Permissions
+    implementation 'com.guolindev.permissionx:permissionx:1.7.1'
+    
+    testImplementation 'junit:junit:4.13.2'
+    androidTestImplementation 'androidx.test.ext:junit:1.1.5'
+    androidTestImplementation 'androidx.test.espresso:espresso-core:3.5.1'
+}
